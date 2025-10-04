@@ -1,0 +1,348 @@
+/* =============================
+   FILE: manifest.json
+   (MV3; New Tab uses your GitHub-style UI. No remote scripts.)
+   ============================= */
+{
+  "manifest_version": 3,
+  "name": "Personal Dashboard",
+  "version": "1.1.0",
+  "description": "New Tab dashboard with Google Calendar (OAuth via launchWebAuthFlow) and a weather panel placeholder.",
+  "chrome_url_overrides": { "newtab": "newtab.html" },
+  "options_page": "options.html",
+  "action": { "default_title": "Open Dashboard", "default_popup": "popup.html" },
+  "background": { "service_worker": "sw.js" },
+  "permissions": ["storage", "identity"],
+  "host_permissions": [
+    "https://www.googleapis.com/*",
+    "https://accounts.google.com/*",
+    "https://geocoding-api.open-meteo.com/*",
+    "https://api.open-meteo.com/*"
+  ],
+  "icons": {
+    "16": "icons/icon_16.png",
+    "48": "icons/icon_48.png",
+    "128": "icons/icon_128.png"
+  }
+}
+
+/* =============================
+   FILE: sw.js (background)
+   Notes: If your current sw.js already works, you can keep it.
+          Otherwise paste your Web OAuth client ID below.
+   ============================= */
+// OAuth via chrome.identity.launchWebAuthFlow
+const CLIENT_ID = "REPLACE_WITH_YOUR_WEB_CLIENT_ID.apps.googleusercontent.com"; // <-- paste yours
+const REDIRECT_URI = `https://${chrome.runtime.id}.chromiumapp.org/`;
+const SCOPE = [
+  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/calendar.settings.readonly"
+].join(" ");
+const API_BASE = "https://www.googleapis.com/calendar/v3";
+
+let tokenCache = null;
+
+async function getAccessToken(interactive) {
+  if (tokenCache && tokenCache.exp > Date.now() + 60000) return tokenCache.token;
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
+    response_type: "token",
+    scope: SCOPE,
+    include_granted_scopes: "true",
+    state: String(Math.random())
+  });
+  if (interactive) params.set("prompt", "consent");
+  const authUrl = "https://accounts.google.com/o/oauth2/v2/auth?" + params.toString();
+
+  const redirect = await new Promise((resolve, reject) => {
+    chrome.identity.launchWebAuthFlow({ url: authUrl, interactive }, url => {
+      if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
+      if (!url) return reject(new Error("No redirect URL"));
+      resolve(url);
+    });
+  });
+  const frag = redirect.split("#")[1] || "";
+  const qp = new URLSearchParams(frag);
+  const access_token = qp.get("access_token");
+  const expires_in = parseInt(qp.get("expires_in") || "3600", 10);
+  if (!access_token) throw new Error("No access token");
+  tokenCache = { token: access_token, exp: Date.now() + expires_in * 1000 };
+  return access_token;
+}
+
+async function gfetch(path, params = {}) {
+  let token;
+  try { token = await getAccessToken(false); } catch { token = await getAccessToken(true); }
+  const url = new URL(API_BASE + path);
+  Object.entries(params).forEach(([k,v])=> url.searchParams.set(k,v));
+  let r = await fetch(url.toString(), { headers: { Authorization: "Bearer " + token } });
+  if (r.status === 401) {
+    tokenCache = null; token = await getAccessToken(true);
+    r = await fetch(url.toString(), { headers: { Authorization: "Bearer " + token } });
+  }
+  if (!r.ok) throw new Error("API error " + r.status);
+  return r.json();
+}
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  (async () => {
+    try {
+      if (msg.type === "calendarList") {
+        const data = await gfetch("/users/me/calendarList", { minAccessRole: "reader", showHidden: "true" });
+        sendResponse({ ok: true, data });
+      } else if (msg.type === "events") {
+        const { calId, params } = msg;
+        const data = await gfetch(`/calendars/${encodeURIComponent(calId)}/events`, params || {});
+        sendResponse({ ok: true, data });
+      } else {
+        sendResponse({ ok: false, error: "unknown" });
+      }
+    } catch (e) { sendResponse({ ok: false, error: String(e) }); }
+  })();
+  return true;
+});
+
+/* =============================
+   FILE: ui.css
+   (Matches your GitHub layout: centered header, icon row, search, fixed 2-column grid.)
+   ============================= */
+:root{
+  --maxw: 1220px;      /* page max width */
+  --side-pad: 22px;    /* horizontal padding */
+  --gap: 22px;         /* space between columns */
+  --top-offset: 210px; /* top spacing to header */
+  --cal-w: 760px;      /* left column width */
+  --wx-w: 420px;       /* right column width */
+  --cal-h: 525px;      /* card heights */
+  --wx-h: 525px;
+  --bg:  #0b0c0f; --ink:#fff; --muted:#a9b0b8; --card:#0a0a0b;
+  --cal-mask-right: 0px; --cal-mask-bottom: 0px; /* optional crops */
+}
+html,body{margin:0;min-height:100vh;background:#0b0c0f;color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.small{font-size:13px;color:var(--muted)} .hidden{display:none}
+
+header{max-width:var(--maxw);margin:var(--top-offset) auto 12px;padding:0 var(--side-pad);text-align:center}
+header h1{margin:0 0 14px;font-weight:800;letter-spacing:.2px}
+
+.app-links{display:flex;justify-content:center;gap:26px;margin:0 0 18px}
+.app-links a{display:inline-flex;width:42px;height:42px;transition:transform .15s ease,opacity .15s ease}
+.app-links a:hover{transform:scale(1.08);opacity:.9}
+.app-links img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+
+.searchbox{max-width:700px;margin:0 auto 18px}
+.searchbox form{display:flex;gap:10px}
+.searchbox input[type="search"]{flex:1;padding:12px 16px;border-radius:12px;border:1px solid #2a2d33;background:#0f1115;color:#fff;font-size:1.05rem}
+
+.twoCol{max-width:var(--maxw);margin:0 auto;padding:0 var(--side-pad) var(--side-pad);display:grid;gap:var(--gap);grid-template-columns: var(--cal-w) var(--wx-w);align-items:start}
+.card{background:var(--card);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.card--cal{height:var(--cal-h)} .card--wx{height:var(--wx-h)}
+iframe{border:0;width:100%;height:100%;background:#111}
+.clip-cal{position:relative;width:100%;height:100%;overflow:hidden;background:#111}
+.clip-cal iframe{width:100%;height:100%}
+.cal-mask-right,.cal-mask-bottom{position:absolute;background:#111;z-index:2}
+.cal-mask-right{top:0;right:0;width:var(--cal-mask-right);height:100%}
+.cal-mask-bottom{left:0;right:0;bottom:0;height:var(--cal-mask-bottom)}
+.wx-head{display:flex;align-items:center;justify-content:space-between;padding:10px}
+#weather-current{padding:0 10px 6px}
+#weather-7day{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;list-style:none;margin:0;padding:10px}
+#weather-7day li{background:#101114;border:1px solid #23262b;border-radius:12px;padding:10px;text-align:center}
+#weather-7day .wk{opacity:.8;font-size:12px} .hi{font-weight:700} .lo{opacity:.7}
+footer{max-width:var(--maxw);margin:0 auto;padding:14px var(--side-pad);border-top:1px solid #202226}
+
+/* =============================
+   FILE: newtab.html
+   (HTML structure mirrors your GitHub page. Weather widget placeholder is safe.)
+   ============================= */
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Personal Dashboard</title>
+  <link rel="stylesheet" href="ui.css?v=20" />
+</head>
+<body>
+  <header>
+    <h1 id="greet">Good day</h1>
+    <nav class="app-links">
+      <a href="https://gradebook.hisd.com/" target="_blank" aria-label="Skyward"><img src="https://www.skyward.com/web/media/Images/Menu/skyward-logo-white.svg" alt="Skyward"></a>
+      <a href="https://mail.google.com/" target="_blank" aria-label="Gmail"><img src="https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico" alt="Gmail"></a>
+      <a href="https://drive.google.com/" target="_blank" aria-label="Drive"><img src="https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_48dp.png" alt="Drive"></a>
+      <a href="https://wayground.com/" target="_blank" aria-label="Wayground"><img src="https://play-lh.googleusercontent.com/Mzw4WeBg1z0Q7tw4vK3771kVE5vRsjJcAyAPQFsFdC3ylhXYy0Z_7LFGPTE6zYcjSStY=s48-rw" alt="Wayground"></a>
+      <a href="https://www.youtube.com/" target="_blank" aria-label="YouTube"><img src="https://www.gstatic.com/images/branding/product/1x/youtube_64dp.png" alt="YouTube"></a>
+      <a href="https://chat.openai.com/" target="_blank" aria-label="ChatGPT"><img src="https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg" alt="ChatGPT"></a>
+    </nav>
+    <div class="searchbox">
+      <form id="gsearch" action="https://www.google.com/search" method="GET"><input id="q" name="q" type="search" placeholder="Search Google…" autocomplete="off" /></form>
+    </div>
+  </header>
+
+  <main class="twoCol">
+    <!-- LEFT: Calendar embed (agenda) -->
+    <section class="card card--cal">
+      <div class="wx-head" style="justify-content:flex-end"><span class="small">Timezone: <span id="tzLabel"></span></span></div>
+      <div class="clip-cal">
+        <iframe id="gcal" title="Google Calendar"></iframe>
+        <div class="cal-mask-right"></div>
+        <div class="cal-mask-bottom"></div>
+      </div>
+      <pre id="fallback" class="small hidden"></pre>
+    </section>
+
+    <!-- RIGHT: Weather placeholder (safe) -->
+    <aside class="card card--wx">
+      <div class="wx-head"><strong>Weather</strong><span class="small" id="weather-lbl"></span></div>
+      <div id="weather-current" class="small">Setup → pick a city or use location</div>
+      <ul id="weather-7day"></ul>
+      <!-- We will not load weatherwidget.io script in MV3. We'll fill this via JS later. -->
+    </aside>
+  </main>
+
+  <footer class="small"><a href="options.html">Customize</a></footer>
+  <script src="newtab.js?v=20"></script>
+</body>
+</html>
+
+/* =============================
+   FILE: newtab.js
+   (Builds the agenda iframe from saved calendars; greeting; simple search.)
+   ============================= */
+const $ = s => document.querySelector(s);
+
+(async function boot(){
+  const conf = await chrome.storage.sync.get({ name:"", tz:"", wx:"", wx_coords:null, wx_label:"", calIds:[], firstRun:true });
+  if (conf.firstRun || !conf.calIds.length) { location.href = chrome.runtime.getURL('options.html#firstrun'); return; }
+
+  $('#greet').textContent = conf.name ? `Good day, ${conf.name} 👋` : 'Your Dashboard';
+  $('#tzLabel').textContent = conf.tz || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  // Google Calendar agenda iframe (same as your GitHub page)
+  const ids = conf.calIds || [];
+  const base = 'https://calendar.google.com/calendar/embed';
+  const q = new URLSearchParams({ mode:'AGENDA', showTitle:0, showPrint:0, showTabs:0, showCalendars:0, showTz:0, ctz: conf.tz || Intl.DateTimeFormat().resolvedOptions().timeZone });
+  ids.forEach(id=> q.append('src', id));
+  $('#gcal').src = ids.length ? base + '?' + q.toString() : 'about:blank';
+  if (!ids.length) { $('#fallback').textContent = 'No calendars selected. Open Setup.'; $('#fallback').classList.remove('hidden'); }
+
+  // Google search
+  document.getElementById('gsearch')?.addEventListener('submit', (e)=>{
+    e.preventDefault(); const q=document.getElementById('q').value.trim(); if(q) location.href = 'https://www.google.com/search?q=' + encodeURIComponent(q);
+  });
+})();
+
+/* =============================
+   FILE: options.html
+   (One‑time setup to pick calendars/timezone and save to storage.)
+   ============================= */
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard Setup</title>
+  <link rel="stylesheet" href="ui.css" />
+  <style>
+    .wrap{max-width:800px;margin:40px auto;padding:0 18px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .btn{background:#1f2937;color:#fff;border:0;border-radius:10px;padding:8px 12px;cursor:pointer}
+    ul{list-style:none;padding:0;margin:8px 0;max-height:360px;overflow:auto;border:1px solid #222;border-radius:10px}
+    li{display:flex;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid #222}
+    label{font-weight:600}
+    .small{color:#a9b0b8}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h2>Personal Dashboard • Setup</h2>
+    <p class="small">Sign in to Google (read‑only), pick your calendars, set timezone, and save. Nothing leaves your browser.</p>
+
+    <div class="row">
+      <button id="signin" class="btn">Sign in with Google</button>
+      <span id="who" class="small"></span>
+    </div>
+
+    <div class="row" style="margin:10px 0">
+      <label>Name</label>
+      <input id="name" placeholder="Your name" style="flex:1;min-width:220px;border-radius:8px;border:1px solid #333;background:#0f1115;color:#fff;padding:8px 10px">
+      <label>Timezone</label>
+      <select id="tz" style="min-width:220px;border-radius:8px;border:1px solid #333;background:#0f1115;color:#fff;padding:8px 10px"></select>
+    </div>
+
+    <div id="pickers" class="hidden">
+      <p class="small">Select calendars to include</p>
+      <ul id="cal-list"></ul>
+      <p class="small">Selected (<span id="sel-count">0</span>)</p>
+      <ul id="sel-list"></ul>
+    </div>
+
+    <div class="row" style="margin-top:12px">
+      <button id="save" class="btn">Save</button>
+      <a href="newtab.html" class="btn" style="background:#374151">Open Dashboard</a>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
+
+/* =============================
+   FILE: options.js
+   ============================= */
+const $o = s => document.querySelector(s);
+const tzEl = $o('#tz');
+['America/Chicago','America/New_York','America/Denver','America/Los_Angeles','America/Phoenix','America/Anchorage','Pacific/Honolulu','Europe/London','Europe/Paris','Asia/Tokyo','Asia/Kolkata','Australia/Sydney']
+  .forEach(z=>{ const opt=document.createElement('option'); opt.value=z; opt.textContent=z; tzEl.appendChild(opt); });
+
+let calendars=[], selected=new Set();
+
+function renderLists(){
+  const list=$o('#cal-list'); const sel=$o('#sel-list'); list.innerHTML=''; sel.innerHTML='';
+  calendars.forEach(c=>{
+    const li=document.createElement('li');
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=selected.has(c.id);
+    cb.addEventListener('change',()=>{ if(cb.checked) selected.add(c.id); else selected.delete(c.id); renderLists(); });
+    li.append(cb, document.createTextNode(' '+c.summary+(c.primary?' (Primary)':'')));
+    list.appendChild(li);
+  });
+  [...selected].forEach(id=>{
+    const c=calendars.find(x=>x.id===id); if(!c) return; const li=document.createElement('li'); li.textContent=c.summary; sel.appendChild(li);
+  });
+  $o('#sel-count').textContent = selected.size;
+}
+
+$o('#signin').addEventListener('click', async()=>{
+  const resp = await chrome.runtime.sendMessage({ type:'calendarList' });
+  if(!resp?.ok){ alert('Sign-in failed: '+resp?.error); return; }
+  calendars = (resp.data.items||[]).sort((a,b)=> (a.primary?-1:1) || a.summary.localeCompare(b.summary));
+  $o('#pickers').classList.remove('hidden');
+  renderLists();
+  $o('#who').textContent = 'Signed in';
+});
+
+$o('#save').addEventListener('click', async()=>{
+  const name = $o('#name').value.trim();
+  const tz = $o('#tz').value || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const calIds = [...selected];
+  await chrome.storage.sync.set({ name, tz, calIds, firstRun:false });
+  location.href = 'newtab.html';
+});
+
+window.addEventListener('load', async()=>{
+  const conf = await chrome.storage.sync.get(null);
+  if(conf.name) $o('#name').value = conf.name;
+  if(conf.tz) tzEl.value = conf.tz;
+  if(Array.isArray(conf.calIds)) selected = new Set(conf.calIds);
+  if(selected.size) $o('#pickers').classList.remove('hidden');
+  renderLists();
+});
+
+/* =============================
+   FILE: popup.html (optional toolbar button)
+   ============================= */
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Dashboard</title>
+<style>body{margin:10px;font:13px system-ui} a{display:block;margin:6px 0}</style></head>
+<body>
+  <a href="newtab.html" target="_blank">Open Dashboard</a>
+  <a href="options.html" target="_blank">Setup</a>
+</body></html>

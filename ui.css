@@ -1,0 +1,128 @@
+/* ===== Dashboard layout (MV3-safe, GitHub-exact) ===== */
+:root{
+  /* Width & spacing */
+  --maxw: 1700px;     /* whole page cap */
+  --side-pad: 22px;
+  --gap: 22px;
+  --top-offset: 250px;
+
+  /* Card heights (match your page) */
+  --cal-h: 50vh;      /* use 525px if you prefer fixed */
+  --wx-h: 50vh;
+  --cal-offset: 0px;
+  --wx-offset: 0px;
+
+  /* Colors */
+  --bg: #0a0a0b; --card:#0a0a0b; --ink:#fff; --muted:#a9b0b8;
+  --card-radius: 12px; --card-shadow: none;
+
+  /* Optional calendar edge trim */
+  --cal-mask-right: 0px;
+  --cal-mask-bottom: 0px;
+}
+
+/* Base */
+*{ box-sizing:border-box }
+html,body{
+  margin:0; min-height:100vh; display:flex; flex-direction:column;
+  background:var(--bg) !important;  /* force dark even if Chrome theme tries otherwise */
+  color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+}
+.small{font-size:13px;color:var(--muted)}
+.hidden{display:none}
+
+/* Header */
+header{
+  max-width:var(--maxw);
+  margin:var(--top-offset) auto 10px;
+  padding:0 var(--side-pad);
+  text-align:center;
+}
+header h1{margin:0 0 14px;font-weight:700}
+
+/* App icons */
+.app-links{display:flex;justify-content:center;gap:26px;margin:0 0 18px}
+.app-links a{display:inline-flex;width:40px;height:40px;transition:transform .2s,opacity .2s}
+.app-links a:hover{transform:scale(1.15);opacity:.85}
+.app-links img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+
+/* Search */
+.searchbox{max-width:700px;margin:0 auto 18px}
+.searchbox form{display:flex;gap:10px}
+.searchbox input[type="search"]{
+  flex:1;padding:12px 16px;font-size:1.05rem;border-radius:10px;
+  border:none;background:#0f1115;color:#fff;
+}
+
+/* Two columns (calendar left, weather right) */
+.twoCol{
+  max-width:var(--maxw);margin:0 auto;padding:0 var(--side-pad) var(--side-pad);
+  display:grid;gap:var(--gap);
+  grid-template-columns: 1.6fr 1.4fr;  /* same ratio as your GitHub page */
+  align-items:start;
+}
+@media (max-width:1100px){ .twoCol{ grid-template-columns:1fr } }
+
+/* Cards */
+.card{
+  background:var(--card);border-radius:var(--card-radius);box-shadow:var(--card-shadow);
+  overflow:hidden;display:flex;flex-direction:column;
+}
+.card--cal{height:var(--cal-h);margin-top:var(--cal-offset)}
+.card--wx {height:var(--wx-h); margin-top:var(--wx-offset)}
+
+/* Iframes fill */
+iframe{border:0;width:100%;height:100%;background:#222}
+
+/* Calendar optional masks */
+.clip-cal{position:relative;width:100%;height:100%;overflow:hidden;background:#222}
+.clip-cal iframe{width:100%;height:100%}
+.cal-mask-right,.cal-mask-bottom{position:absolute;background:#222;z-index:2}
+.cal-mask-right{top:0;right:0;width:var(--cal-mask-right);height:100%}
+.cal-mask-bottom{left:0;right:0;bottom:0;height:var(--cal-mask-bottom)}
+
+/* ===== Weather (compact: big today + rows) ===== */
+.wx-head{ display:none !important }
+
+/* Big "today" block */
+#weather-current{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; border-bottom:1px solid #23262b;
+}
+#weather-current .place{ font-weight:700; letter-spacing:.2px; font-size:1.05rem }
+#weather-current .date{ color:#a9b0b8; font-size:12px } /* kept in markup but header is hidden */
+#weather-current .emoji{ font-size:41px; margin-right:10px }   /* was 34px */
+#weather-current .now{ font-size:48px; font-weight:800; line-height:1 } /* was 40px */
+
+/* Compact list rows with ~20% larger text/icons */
+#weather-7day{ list-style:none; margin:0; padding:0 }
+#weather-7day li{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 14px; border-bottom:1px solid #23262b;
+}
+#weather-7day li:last-child{ border-bottom:0 }
+#weather-7day .wk{ width:72px; font-size:16px; opacity:.9 }   /* was 13px */
+#weather-7day .icon{ width:28px; text-align:center; font-size:24px } /* was 20px */
+#weather-7day .temps{ min-width:100px; text-align:right }
+#weather-7day .hi{ font-weight:700; margin-right:6px; font-size:18px }
+#weather-7day .lo{ opacity:.75; font-size:16px }
+#weather-7day .pop{ width:52px; text-align:right; opacity:.85; font-size:13px }
+
+/* Temporary location override (top of weather card) */
+.wx-override{ padding:8px 12px; border-bottom:1px solid #23262b }
+.wx-override form{ display:flex; gap:8px; align-items:center }
+.wx-override input{
+  flex:1; background:#0f1115; color:#fff; border:1px solid #23262b;
+  border-radius:10px; padding:8px 10px; outline:none;
+}
+.wx-override .btn{
+  background:#1f2937; color:#fff; border:0; border-radius:10px;
+  padding:8px 12px; cursor:pointer;
+}
+.wx-override .link{
+  color:#9ab4ff; text-decoration:none; font-size:12px; white-space:nowrap;
+}
+
+/* Footer */
+footer{max-width:var(--maxw);margin:0 auto;padding:14px var(--side-pad);border-top:1px solid #202226}
