@@ -1,64 +1,48 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Personal Dashboard</title>
-<link rel="stylesheet" href="ui.css?v=20" />
+  <meta charset="utf-8" />
+  <title>Scott’s Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-<h1 id="greet">Good day</h1>
-<nav class="app-links">
-<a href="https://gradebook.hisd.com/" target="_blank" aria-label="Skyward"><img src="https://www.skyward.com/web/media/Images/Menu/skyward-logo-white.svg" alt="Skyward"></a>
-<a href="https://mail.google.com/" target="_blank" aria-label="Gmail"><img src="https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico" alt="Gmail"></a>
-<a href="https://drive.google.com/" target="_blank" aria-label="Drive"><img src="https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_48dp.png" alt="Drive"></a>
-<a href="https://wayground.com/" target="_blank" aria-label="Wayground"><img src="https://play-lh.googleusercontent.com/Mzw4WeBg1z0Q7tw4vK3771kVE5vRsjJcAyAPQFsFdC3ylhXYy0Z_7LFGPTE6zYcjSStY=s48-rw" alt="Wayground"></a>
-<a href="https://www.youtube.com/" target="_blank" aria-label="YouTube"><img src="https://www.gstatic.com/images/branding/product/1x/youtube_64dp.png" alt="YouTube"></a>
-<a href="https://chat.openai.com/" target="_blank" aria-label="ChatGPT"><img src="https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg" alt="ChatGPT"></a>
-</nav>
-<div class="searchbox">
-<form id="gsearch" action="https://www.google.com/search" method="GET"><input id="q" name="q" type="search" placeholder="Search Google…" autocomplete="off" /></form>
-</div>
-</header>
+  <header> ... (your icons + search) ... </header>
 
+  <main class="twoCol">
+    <!-- LEFT: Calendar -->
+    <section class="card card--cal">
+      <div class="clip-cal">
+        <iframe
+          src="https://calendar.google.com/calendar/embed?mode=AGENDA
+&showTitle=0&showPrint=0&showTabs=0&showCalendars=0&showTz=0
+&ctz=America/Chicago
+&src=family06209881962121678018%40group.calendar.google.com
+&src=ssandvik%40hisd.com
+&src=hisd.com_04q8b9un48sev80re8j233gv8o%40group.calendar.google.com
+&src=hisd.com_q5rbp2mpgnq11c6if725s7mtto%40group.calendar.google.com">
+        </iframe>
+        <div class="cal-mask-right"></div>
+        <div class="cal-mask-bottom"></div>
+      </div>
+    </section>
 
-<main class="twoCol">
-<!-- LEFT: Calendar embed (agenda) -->
-<section class="card card--cal">
-<div class="wx-head" style="justify-content:flex-end"><span class="small">Timezone: <span id="tzLabel"></span></span></div>
-<div class="clip-cal">
-<iframe id="gcal" title="Google Calendar"></iframe>
-<div class="cal-mask-right"></div>
-<div class="cal-mask-bottom"></div>
-</div>
-<pre id="fallback" class="small hidden"></pre>
-</section>
+    <!-- RIGHT: Weather -->
+    <section class="card card--wx">
+      <!-- Option A: keep just the fallback iframe -->
+      <div class="wx-fallback-wrap">
+        <div class="wx-mask-top"></div>
+        <iframe class="wx-fallback"
+          src="https://www.google.com/search?q=weather+hallsville+tx&igu=1"
+          title="Hallsville Weather (fallback)"></iframe>
+        <div class="wx-mask-bottom"></div>
+      </div>
 
+      <!-- Option B (preferred): an empty container your JS fills -->
+      <!-- <div id="wx"></div> -->
+    </section>
+  </main>
 
-<!-- RIGHT: Weather placeholder (safe) -->
-<aside class="card card--wx">
-<div class="wx-head"><strong>Weather</strong><span class="small" id="weather-lbl"></span></div>
-<!-- Temporary location override (session-only) -->
-<div class="wx-override">
-  <form id="wx-override" autocomplete="off">
-    <input id="wx-input" placeholder="Try: Dallas, TX or 75001">
-    <button class="btn" type="submit">Go</button>
-    <a id="wx-clear" href="#" class="link hidden">Use saved</a>
-  </form>
-</div>
-
-<div id="weather-current"></div>
-<ul id="weather-7day"></ul>
-
-<div id="weather-current" class="small">Setup → pick a city or use location</div>
-<ul id="weather-7day"></ul>
-<!-- We will not load weatherwidget.io script in MV3. We'll fill this via JS later. -->
-</aside>
-</main>
-
-
-<footer class="small"><a href="options.html">Customize</a></footer>
-<script src="newtab.js?v=20"></script>
+  <script src="newtab.js"></script>
 </body>
 </html>
